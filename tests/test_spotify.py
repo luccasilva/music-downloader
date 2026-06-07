@@ -13,12 +13,12 @@ def test_is_spotify_url_detects_track_album_playlist():
     assert is_spotify_url("https://open.spotify.com/album/abc") is True
     assert is_spotify_url("https://open.spotify.com/playlist/abc") is True
     assert is_spotify_url("spotify:track:abc") is True
-    assert is_spotify_url("https://spotify.link/abc") is True
 
 
 def test_is_spotify_url_rejects_others():
     assert is_spotify_url("https://youtu.be/abc") is False
     assert is_spotify_url("https://soundcloud.com/a/b") is False
+    assert is_spotify_url("https://spotify.link/abc") is False  # short links ainda não suportados
 
 
 def test_track_query_and_display():
@@ -56,7 +56,7 @@ class _FakeSp:
     def album(self, url):
         return self._album
 
-    def playlist_items(self, url):
+    def playlist_items(self, url, additional_types=None):
         return self._playlist
 
     def next(self, result):

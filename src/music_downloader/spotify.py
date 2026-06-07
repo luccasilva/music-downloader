@@ -6,7 +6,7 @@ import os
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
-_SPOTIFY_HOSTS = {"open.spotify.com", "spotify.link"}
+_SPOTIFY_HOSTS = {"open.spotify.com"}
 _KINDS = ("track", "album", "playlist")
 
 
@@ -62,7 +62,7 @@ def _track_from_full(obj: dict) -> SpotifyTrack:
     album = obj.get("album") or {}
     return SpotifyTrack(
         title=obj.get("name", ""),
-        artists=tuple(a["name"] for a in obj.get("artists", [])),
+        artists=tuple(a.get("name", "") for a in obj.get("artists", [])),
         album=album.get("name", ""),
         release_date=album.get("release_date", ""),
         track_number=obj.get("track_number", 0),
@@ -77,7 +77,7 @@ def _track_from_full(obj: dict) -> SpotifyTrack:
 def _track_from_album_item(item: dict, album: dict) -> SpotifyTrack:
     return SpotifyTrack(
         title=item.get("name", ""),
-        artists=tuple(a["name"] for a in item.get("artists", [])),
+        artists=tuple(a.get("name", "") for a in item.get("artists", [])),
         album=album.get("name", ""),
         release_date=album.get("release_date", ""),
         track_number=item.get("track_number", 0),
@@ -127,7 +127,7 @@ class SpotifyClient:
                 items.extend(results.get("items", []))
             return [_track_from_album_item(it, album) for it in items]
         # playlist
-        results = self._sp.playlist_items(url)
+        results = self._sp.playlist_items(url, additional_types=("track",))
         items = list(results.get("items", []))
         while results.get("next"):
             results = self._sp.next(results)

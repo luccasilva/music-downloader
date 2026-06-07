@@ -9,7 +9,7 @@ from .spotify import SpotifyTrack
 
 
 def _fetch_cover(url: str) -> bytes:
-    with urllib.request.urlopen(url) as resp:
+    with urllib.request.urlopen(url, timeout=30) as resp:
         return resp.read()
 
 
@@ -25,7 +25,7 @@ def apply(track: SpotifyTrack, filepaths: list[str]) -> None:
 
 def _tag_mp3(filepath: str, track: SpotifyTrack, cover: bytes | None) -> None:
     from mutagen.id3 import (
-        APIC, ID3, TALB, TDRC, TIT2, TPE1, TPOS, TRCK, ID3NoHeaderError,
+        APIC, ID3, TALB, TDRC, TIT2, TPE1, TPOS, TRCK, TSRC, ID3NoHeaderError,
     )
 
     try:
@@ -39,6 +39,8 @@ def _tag_mp3(filepath: str, track: SpotifyTrack, cover: bytes | None) -> None:
     tags.setall("TPOS", [TPOS(encoding=3, text=str(track.disc_number))])
     if track.release_date:
         tags.setall("TDRC", [TDRC(encoding=3, text=track.release_date)])
+    if track.isrc:
+        tags.setall("TSRC", [TSRC(encoding=3, text=track.isrc)])
     if cover:
         tags.delall("APIC")
         tags.add(APIC(encoding=3, mime="image/jpeg", type=3, desc="Cover", data=cover))
@@ -57,6 +59,8 @@ def _tag_flac(filepath: str, track: SpotifyTrack, cover: bytes | None) -> None:
     audio["discnumber"] = str(track.disc_number)
     if track.release_date:
         audio["date"] = track.release_date
+    if track.isrc:
+        audio["isrc"] = track.isrc
     if cover:
         picture = Picture()
         picture.type = 3  # front cover

@@ -125,7 +125,13 @@ def _download_spotify(
             continue
         path = _final_filepath(info)
         if path:
-            apply_tags(track, [path])
+            try:
+                apply_tags(track, [path])
+            except Exception as exc:  # noqa: BLE001 — tagging não deve abortar o lote
+                print(
+                    f"Aviso: baixei mas não consegui aplicar metadados de "
+                    f"{track.display()} ({exc})."
+                )
         summary.succeeded.append(track.display())
     return summary
 

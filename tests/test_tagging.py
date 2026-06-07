@@ -37,6 +37,7 @@ def test_apply_writes_mp3_tags_and_cover(monkeypatch, tmp_path):
     assert tags.getall("TPE1")[0].text[0] == "Artist A, Artist B"
     assert tags.getall("TALB")[0].text[0] == "My Album"
     assert tags.getall("APIC"), "deveria ter capa embutida"
+    assert tags.getall("TSRC")[0].text[0] == "ZZ"
 
 
 def test_apply_writes_flac_tags_and_cover(monkeypatch, tmp_path):
@@ -52,6 +53,7 @@ def test_apply_writes_flac_tags_and_cover(monkeypatch, tmp_path):
     assert audio["artist"] == ["Artist A", "Artist B"]
     assert audio["album"][0] == "My Album"
     assert audio.pictures, "deveria ter capa embutida"
+    assert audio["isrc"][0] == "ZZ"
 
 
 def test_apply_without_cover_url_skips_picture(monkeypatch, tmp_path):

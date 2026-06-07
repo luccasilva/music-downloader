@@ -250,3 +250,32 @@ def test_download_spotify_missing_credentials_propagates(monkeypatch, tmp_path):
             "https://open.spotify.com/track/abc", str(tmp_path), "mp3",
             ffmpeg_location=r"C:\ffmpeg\ffmpeg.exe",
         )
+
+
+def test_download_spotify_tagging_failure_does_not_abort(monkeypatch, tmp_path, capsys):
+    class _FakeClient:
+        @classmethod
+        def from_env(cls):
+            return cls()
+
+        def resolve(self, url):
+            return [_sp_track(title="Keep")]
+
+    monkeypatch.setattr(core_mod, "SpotifyClient", _FakeClient)
+    monkeypatch.setattr(core_mod, "find_youtube", lambda t: "https://www.youtube.com/watch?v=x")
+
+    def _boom(track, paths):
+        raise RuntimeError("tag falhou")
+
+    monkeypatch.setattr(core_mod, "apply_tags", _boom)
+    _patch_ydl(monkeypatch, {
+        "title": "yt",
+        "requested_downloads": [{"filepath": str(tmp_path / "A - Keep.mp3")}],
+    })
+
+    summary = download(
+        "https://open.spotify.com/track/abc", str(tmp_path), "mp3",
+        ffmpeg_location=r"C:\ffmpeg\ffmpeg.exe",
+    )
+    assert summary.succeeded == ["A - Keep"]  # áudio baixado conta como sucesso
+    assert "metadados" in capsys.readouterr().out.lower()
