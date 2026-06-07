@@ -23,6 +23,7 @@ def build_ydl_options(
     ffmpeg_location: str,
     noplaylist: bool,
     progress_hook: Callable[[dict], None] | None = None,
+    overrides: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     extract: dict[str, Any] = {
         "key": "FFmpegExtractAudio",
@@ -49,4 +50,6 @@ def build_ydl_options(
     }
     if progress_hook is not None:
         opts["progress_hooks"] = [progress_hook]
+    if overrides:
+        opts.update(overrides)  # ajustes do provider têm precedência
     return opts

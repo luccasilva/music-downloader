@@ -51,3 +51,18 @@ def test_ffmpeg_location_is_passed():
 def test_find_ffmpeg_returns_a_path(monkeypatch):
     monkeypatch.setattr("shutil.which", lambda name: None)
     assert find_ffmpeg() == r"C:\ffmpeg\ffmpeg.exe"
+
+
+def test_overrides_are_merged_with_precedence():
+    opts = build_ydl_options(
+        "out", get_format("mp3"), "ff", noplaylist=True,
+        overrides={"cookiesfrombrowser": ("chrome",), "format": "X"},
+    )
+    assert opts["cookiesfrombrowser"] == ("chrome",)
+    assert opts["format"] == "X"  # override tem precedência sobre a base
+
+
+def test_no_overrides_keeps_base():
+    opts = build_ydl_options("out", get_format("mp3"), "ff", noplaylist=True)
+    assert "cookiesfrombrowser" not in opts
+    assert opts["format"] == "bestaudio/best"
