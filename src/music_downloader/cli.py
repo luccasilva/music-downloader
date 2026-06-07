@@ -7,6 +7,7 @@ import argparse
 from .core import download
 from .formats import supported_formats
 from .providers import AuthConfig
+from .spotify import MissingCredentialsError
 
 _BROWSERS = ["chrome", "firefox", "edge", "brave"]
 
@@ -18,7 +19,8 @@ def build_parser() -> argparse.ArgumentParser:
         "MP3/FLAC. O arquivo original é sempre guardado.",
     )
     parser.add_argument(
-        "url", help="URL de um vídeo/faixa ou playlist (YouTube ou SoundCloud)"
+        "url",
+        help="URL de vídeo/faixa/playlist/álbum (YouTube, SoundCloud ou Spotify)",
     )
     parser.add_argument(
         "-o", "--output", default="downloads",
@@ -56,7 +58,7 @@ def main(argv: list[str] | None = None) -> int:
     auth = _auth_from_args(args)
     try:
         summary = download(args.url, args.output, args.format, auth=auth)
-    except (FileNotFoundError, ValueError) as exc:
+    except (FileNotFoundError, ValueError, MissingCredentialsError) as exc:
         print(f"Erro: {exc}")
         return 1
     print(summary.report())

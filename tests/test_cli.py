@@ -87,3 +87,17 @@ def test_main_reports_unknown_provider_cleanly(monkeypatch, capsys):
     code = main(["https://example.com/x"])
     assert code == 1
     assert "suportado" in capsys.readouterr().out.lower()
+
+
+def test_main_reports_missing_spotify_credentials_cleanly(monkeypatch, capsys):
+    from music_downloader.spotify import MissingCredentialsError
+
+    def _raise(url, output, fmt, auth):
+        raise MissingCredentialsError(
+            "Credenciais do Spotify ausentes. ... SPOTIFY_CLIENT_ID ..."
+        )
+
+    monkeypatch.setattr(cli_mod, "download", _raise)
+    code = main(["https://open.spotify.com/track/abc"])
+    assert code == 1
+    assert "spotify" in capsys.readouterr().out.lower()
