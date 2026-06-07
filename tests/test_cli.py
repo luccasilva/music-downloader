@@ -101,3 +101,21 @@ def test_main_reports_missing_spotify_credentials_cleanly(monkeypatch, capsys):
     code = main(["https://open.spotify.com/track/abc"])
     assert code == 1
     assert "spotify" in capsys.readouterr().out.lower()
+
+
+def test_load_dotenv_sets_env_without_overriding(tmp_path, monkeypatch):
+    from music_downloader.cli import _load_dotenv
+
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        '# comentário\nMDL_TEST_A=valor1\nMDL_TEST_B="com aspas"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("MDL_TEST_A", raising=False)
+    monkeypatch.setenv("MDL_TEST_B", "ja_definido")  # não deve ser sobrescrito
+
+    _load_dotenv(str(env_file))
+
+    import os
+    assert os.environ["MDL_TEST_A"] == "valor1"
+    assert os.environ["MDL_TEST_B"] == "ja_definido"  # env existente vence

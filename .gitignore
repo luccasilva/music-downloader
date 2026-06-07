@@ -4,3 +4,6 @@ __pycache__/
 downloads/
 *.egg-info/
 .pytest_cache/
+.env
+.env.*
+.cache
