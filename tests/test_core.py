@@ -86,3 +86,29 @@ def test_download_creates_output_dir(monkeypatch, tmp_path):
     target = tmp_path / "new" / "nested"
     download("https://youtu.be/abc", str(target), "mp3")
     assert target.exists()
+
+
+def test_download_raises_when_ffmpeg_missing(tmp_path):
+    import pytest
+    with pytest.raises(FileNotFoundError, match="ffmpeg"):
+        download(
+            "https://youtu.be/abc", str(tmp_path), "mp3",
+            ffmpeg_location=str(tmp_path / "nope" / "ffmpeg.exe"),
+        )
+
+
+def test_download_handles_downloer_error_gracefully(monkeypatch, tmp_path):
+    from yt_dlp.utils import DownloadError
+
+    class _RaisingYDL(_FakeYDL):
+        def extract_info(self, url, download):
+            raise DownloadError("vídeo indisponível")
+
+    monkeypatch.setattr(core_mod.yt_dlp, "YoutubeDL", _RaisingYDL)
+    # ffmpeg check must pass: point at the real ffmpeg
+    summary = download(
+        "https://youtu.be/bad", str(tmp_path), "mp3",
+        ffmpeg_location=r"C:\ffmpeg\ffmpeg.exe",
+    )
+    assert summary.ok is False
+    assert summary.failed and "indisponível" in summary.failed[0]

@@ -7,6 +7,7 @@ from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
 import yt_dlp
+from yt_dlp.utils import DownloadError
 
 from .downloader import build_ydl_options, find_ffmpeg
 from .formats import get_format
@@ -43,6 +44,14 @@ class DownloadSummary:
         return "\n".join(lines)
 
 
+def _ensure_ffmpeg(path: str) -> None:
+    if not Path(path).exists():
+        raise FileNotFoundError(
+            f"ffmpeg não encontrado em {path!r}. "
+            "Instale o ffmpeg ou adicione-o ao PATH."
+        )
+
+
 def _collect(info: dict | None, summary: DownloadSummary) -> None:
     if info is None:
         summary.failed.append("(download falhou)")
@@ -66,11 +75,16 @@ def download(
     fmt = get_format(fmt_name)
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     ffmpeg = ffmpeg_location or find_ffmpeg()
+    _ensure_ffmpeg(ffmpeg)
     opts = build_ydl_options(
         output_dir, fmt, ffmpeg, noplaylist=not is_playlist(url)
     )
     summary = DownloadSummary()
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=True)
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+    except DownloadError as exc:
+        summary.failed.append(f"{url}: {exc}")
+        return summary
     _collect(info, summary)
     return summary

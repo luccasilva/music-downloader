@@ -39,3 +39,12 @@ def test_main_returns_one_when_failures(monkeypatch):
         lambda url, output, fmt: DownloadSummary(succeeded=[], failed=["X"]),
     )
     assert main(["URL"]) == 1
+
+
+def test_main_reports_missing_ffmpeg_cleanly(monkeypatch, capsys):
+    def _raise(url, output, fmt):
+        raise FileNotFoundError("ffmpeg não encontrado em 'X'. Instale o ffmpeg ou adicione-o ao PATH.")
+    monkeypatch.setattr(cli_mod, "download", _raise)
+    code = main(["https://youtu.be/abc"])
+    assert code == 1
+    assert "ffmpeg" in capsys.readouterr().out

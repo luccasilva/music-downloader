@@ -28,6 +28,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    summary = download(args.url, args.output, args.format)
+    try:
+        summary = download(args.url, args.output, args.format)
+    except FileNotFoundError as exc:
+        print(f"Erro: {exc}")
+        return 1
     print(summary.report())
     return 0 if summary.ok else 1
