@@ -1,4 +1,4 @@
-"""Orquestração do download: roteamento por provedor, execução e resumo."""
+"""Orquestração do download: roteamento por provedor/resolver, execução e resumo."""
 
 from __future__ import annotations
 
@@ -10,7 +10,10 @@ from yt_dlp.utils import DownloadError
 
 from .downloader import build_ydl_options, find_ffmpeg
 from .formats import get_format
+from .matching import find_youtube
 from .providers import AuthConfig, detect_provider
+from .spotify import SpotifyClient, is_spotify_url
+from .tagging import apply as apply_tags
 
 
 @dataclass
@@ -76,6 +79,57 @@ def _extract(url: str, opts: dict) -> dict | None:
         return ydl.extract_info(url, download=True)
 
 
+def _run_download(url: str, opts: dict) -> dict | None:
+    """Executa o yt-dlp com fallback se a leitura de cookies do navegador falhar."""
+    try:
+        return _extract(url, opts)
+    except Exception as exc:  # noqa: BLE001 — só para detectar erro de cookies
+        if "cookiesfrombrowser" in opts and _is_cookie_error(exc):
+            print(
+                f"Aviso: não consegui ler cookies do navegador ({exc}). "
+                "Seguindo sem login (qualidade pública). Para máxima qualidade, "
+                "exporte um cookies.txt e use --cookies CAMINHO."
+            )
+            opts.pop("cookiesfrombrowser", None)
+            return _extract(url, opts)
+        raise
+
+
+def _final_filepath(info: dict | None) -> str | None:
+    if not info:
+        return None
+    downloads = info.get("requested_downloads")
+    if downloads:
+        return downloads[0].get("filepath")
+    return info.get("filepath")
+
+
+def _download_spotify(
+    url: str, output_dir: str, fmt_name: str, ffmpeg: str
+) -> DownloadSummary:
+    client = SpotifyClient.from_env()  # MissingCredentialsError se faltar
+    tracks = client.resolve(url)
+    fmt = get_format(fmt_name)
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+    summary = DownloadSummary()
+    for track in tracks:
+        youtube_url = find_youtube(track)
+        if not youtube_url:
+            summary.failed.append(f"{track.display()}: sem match confiável no YouTube")
+            continue
+        opts = build_ydl_options(output_dir, fmt, ffmpeg, noplaylist=True)
+        try:
+            info = _run_download(youtube_url, opts)
+        except DownloadError as exc:
+            summary.failed.append(f"{track.display()}: {exc}")
+            continue
+        path = _final_filepath(info)
+        if path:
+            apply_tags(track, [path])
+        summary.succeeded.append(track.display())
+    return summary
+
+
 def download(
     url: str,
     output_dir: str,
@@ -83,12 +137,14 @@ def download(
     ffmpeg_location: str | None = None,
     auth: AuthConfig | None = None,
 ) -> DownloadSummary:
+    ffmpeg = ffmpeg_location or find_ffmpeg()
+    _ensure_ffmpeg(ffmpeg)
+    if is_spotify_url(url):
+        return _download_spotify(url, output_dir, fmt_name, ffmpeg)
     auth = auth or AuthConfig()
     provider = detect_provider(url)  # ValueError se provedor desconhecido
     fmt = get_format(fmt_name)
     Path(output_dir).mkdir(parents=True, exist_ok=True)
-    ffmpeg = ffmpeg_location or find_ffmpeg()
-    _ensure_ffmpeg(ffmpeg)
     opts = build_ydl_options(
         output_dir,
         fmt,
@@ -98,19 +154,7 @@ def download(
     )
     summary = DownloadSummary()
     try:
-        try:
-            info = _extract(url, opts)
-        except Exception as exc:  # noqa: BLE001 — só para detectar erro de cookies
-            if "cookiesfrombrowser" in opts and _is_cookie_error(exc):
-                print(
-                    f"Aviso: não consegui ler cookies do navegador ({exc}). "
-                    "Seguindo sem login (qualidade pública). Para máxima qualidade, "
-                    "exporte um cookies.txt e use --cookies CAMINHO."
-                )
-                opts.pop("cookiesfrombrowser", None)
-                info = _extract(url, opts)
-            else:
-                raise
+        info = _run_download(url, opts)
     except DownloadError as exc:
         summary.failed.append(f"{url}: {exc}")
         return summary

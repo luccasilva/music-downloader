@@ -175,3 +175,78 @@ def test_download_does_not_retry_on_login_required_error(monkeypatch, tmp_path, 
     assert summary.failed and "credentials" in summary.failed[0]
     assert len(calls) == 1  # não deve ter havido retry
     assert "não consegui ler cookies" not in capsys.readouterr().out
+
+
+from music_downloader.spotify import MissingCredentialsError, SpotifyTrack
+
+
+def _sp_track(duration_ms=180000, title="T", artist="A"):
+    return SpotifyTrack(
+        title=title, artists=(artist,), album="Al", release_date="2020",
+        track_number=1, total_tracks=1, disc_number=1,
+        duration_ms=duration_ms, isrc=None, cover_url=None,
+    )
+
+
+def test_download_spotify_resolves_matches_downloads_and_tags(monkeypatch, tmp_path):
+    track = _sp_track()
+
+    class _FakeClient:
+        @classmethod
+        def from_env(cls):
+            return cls()
+
+        def resolve(self, url):
+            return [track]
+
+    monkeypatch.setattr(core_mod, "SpotifyClient", _FakeClient)
+    monkeypatch.setattr(core_mod, "find_youtube", lambda t: "https://www.youtube.com/watch?v=x")
+    tagged = []
+    monkeypatch.setattr(core_mod, "apply_tags", lambda t, paths: tagged.append((t, paths)))
+    _patch_ydl(monkeypatch, {
+        "title": "yt title",
+        "requested_downloads": [{"filepath": str(tmp_path / "A - T.mp3")}],
+    })
+
+    summary = download(
+        "https://open.spotify.com/track/abc", str(tmp_path), "mp3",
+        ffmpeg_location=r"C:\ffmpeg\ffmpeg.exe",
+    )
+    assert summary.succeeded == ["A - T"]
+    assert tagged and tagged[0][1] == [str(tmp_path / "A - T.mp3")]
+
+
+def test_download_spotify_no_match_is_failure(monkeypatch, tmp_path):
+    class _FakeClient:
+        @classmethod
+        def from_env(cls):
+            return cls()
+
+        def resolve(self, url):
+            return [_sp_track(title="NoMatch")]
+
+    monkeypatch.setattr(core_mod, "SpotifyClient", _FakeClient)
+    monkeypatch.setattr(core_mod, "find_youtube", lambda t: None)
+    _patch_ydl(monkeypatch, {"title": "x"})
+
+    summary = download(
+        "https://open.spotify.com/track/abc", str(tmp_path), "mp3",
+        ffmpeg_location=r"C:\ffmpeg\ffmpeg.exe",
+    )
+    assert summary.succeeded == []
+    assert summary.failed and "NoMatch" in summary.failed[0]
+
+
+def test_download_spotify_missing_credentials_propagates(monkeypatch, tmp_path):
+    class _FakeClient:
+        @classmethod
+        def from_env(cls):
+            raise MissingCredentialsError("faltam credenciais")
+
+    monkeypatch.setattr(core_mod, "SpotifyClient", _FakeClient)
+    import pytest
+    with pytest.raises(MissingCredentialsError):
+        download(
+            "https://open.spotify.com/track/abc", str(tmp_path), "mp3",
+            ffmpeg_location=r"C:\ffmpeg\ffmpeg.exe",
+        )
