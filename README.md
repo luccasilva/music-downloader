@@ -11,6 +11,22 @@ detecta a fonte automaticamente.
 > teto de qualidade é o do YouTube (~160 kbps Opus). YouTube/SoundCloud baixam
 > direto; no SoundCloud o original do artista (potencialmente lossless) sai com login.
 
+## Documentação
+
+| Documento | Para quê |
+|-----------|----------|
+| [docs/usage.md](docs/usage.md) | Uso, opções, exemplos, setup e troubleshooting |
+| [docs/architecture.md](docs/architecture.md) | Estrutura interna, fluxo de dados, como estender |
+| [CLAUDE.md](CLAUDE.md) | Guia para o Claude trabalhar no repo (carregado automaticamente) |
+| `.claude/skills/music-downloader/` | Skill que ensina o Claude a baixar a pedido |
+
+## Para o Claude (e outros agentes)
+
+Este repo é "agent-friendly": o **Claude Code** lê o [CLAUDE.md](CLAUDE.md)
+automaticamente e a **skill de projeto** `music-downloader` é acionada quando você
+pede para baixar uma música de um link. Basta pedir em linguagem natural, ex.:
+*"baixa essa música em flac: <link>"*.
+
 ## Requisitos
 
 - Python 3.12+
@@ -51,15 +67,21 @@ mdl "https://open.spotify.com/playlist/PLAYLIST_ID"
 ### Credenciais do Spotify
 
 Para links do Spotify, crie um app gratuito em
-<https://developer.spotify.com/dashboard>, pegue o **Client ID** e **Client Secret**
-e defina as variáveis de ambiente:
+<https://developer.spotify.com/dashboard>, pegue o **Client ID** e **Client Secret**.
+Defina via variáveis de ambiente **ou** crie um arquivo `.env` na raiz (gitignored,
+carregado automaticamente):
+
+```
+SPOTIFY_CLIENT_ID=seu_client_id
+SPOTIFY_CLIENT_SECRET=seu_client_secret
+```
+
+Ou, por sessão do PowerShell:
 
 ```powershell
 $env:SPOTIFY_CLIENT_ID = "seu_client_id"
 $env:SPOTIFY_CLIENT_SECRET = "seu_client_secret"
 ```
-
-(Para persistir, use as Variáveis de Ambiente do Windows.)
 
 ## Testes
 
