@@ -1,25 +1,6 @@
-from music_downloader.core import is_playlist
-
-
-def test_plain_video_url_is_not_playlist():
-    assert is_playlist("https://www.youtube.com/watch?v=abc123") is False
-
-
-def test_video_with_list_param_is_treated_as_single_video():
-    # watch?v=...&list=... -> intenção é o vídeo; não baixa a playlist toda
-    assert is_playlist("https://www.youtube.com/watch?v=abc123&list=PL999") is False
-
-
-def test_playlist_url_is_playlist():
-    assert is_playlist("https://www.youtube.com/playlist?list=PL999") is True
-
-
-def test_youtu_be_short_link_is_not_playlist():
-    assert is_playlist("https://youtu.be/abc123") is False
-
-
 import music_downloader.core as core_mod
 from music_downloader.core import DownloadSummary, download
+from music_downloader.providers import AuthConfig
 
 
 class _FakeYDL:
@@ -97,7 +78,7 @@ def test_download_raises_when_ffmpeg_missing(tmp_path):
         )
 
 
-def test_download_handles_downloer_error_gracefully(monkeypatch, tmp_path):
+def test_download_handles_download_error_gracefully(monkeypatch, tmp_path):
     from yt_dlp.utils import DownloadError
 
     class _RaisingYDL(_FakeYDL):
@@ -105,10 +86,38 @@ def test_download_handles_downloer_error_gracefully(monkeypatch, tmp_path):
             raise DownloadError("vídeo indisponível")
 
     monkeypatch.setattr(core_mod.yt_dlp, "YoutubeDL", _RaisingYDL)
-    # ffmpeg check must pass: point at the real ffmpeg
     summary = download(
         "https://youtu.be/bad", str(tmp_path), "mp3",
         ffmpeg_location=r"C:\ffmpeg\ffmpeg.exe",
     )
     assert summary.ok is False
     assert summary.failed and "indisponível" in summary.failed[0]
+
+
+def test_download_applies_soundcloud_cookie_override(monkeypatch, tmp_path):
+    _patch_ydl(monkeypatch, {"title": "SC"})
+    download(
+        "https://soundcloud.com/a/b", str(tmp_path), "mp3",
+        ffmpeg_location=r"C:\ffmpeg\ffmpeg.exe",
+        auth=AuthConfig(mode="browser", browser="chrome"),
+    )
+    assert _FakeYDL.last_opts["cookiesfrombrowser"] == ("chrome",)
+
+
+def test_download_youtube_has_no_cookie_override(monkeypatch, tmp_path):
+    _patch_ydl(monkeypatch, {"title": "Y"})
+    download(
+        "https://youtu.be/abc", str(tmp_path), "mp3",
+        ffmpeg_location=r"C:\ffmpeg\ffmpeg.exe",
+        auth=AuthConfig(mode="browser", browser="chrome"),
+    )
+    assert "cookiesfrombrowser" not in _FakeYDL.last_opts
+
+
+def test_download_unknown_provider_raises(tmp_path):
+    import pytest
+    with pytest.raises(ValueError, match="não suportado"):
+        download(
+            "https://example.com/x", str(tmp_path), "mp3",
+            ffmpeg_location=r"C:\ffmpeg\ffmpeg.exe",
+        )
