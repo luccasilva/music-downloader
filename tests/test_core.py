@@ -121,3 +121,30 @@ def test_download_unknown_provider_raises(tmp_path):
             "https://example.com/x", str(tmp_path), "mp3",
             ffmpeg_location=r"C:\ffmpeg\ffmpeg.exe",
         )
+
+
+def test_download_retries_without_cookies_on_cookie_error(monkeypatch, tmp_path, capsys):
+    constructions = []
+
+    class _CookieFailYDL(_FakeYDL):
+        def __init__(self, opts):
+            constructions.append(dict(opts))
+            self._opts = opts
+
+        def extract_info(self, url, download):
+            if "cookiesfrombrowser" in self._opts:
+                raise Exception("Failed to decrypt with DPAPI: could not read cookies")
+            return {"title": "SC Track"}
+
+    monkeypatch.setattr(core_mod.yt_dlp, "YoutubeDL", _CookieFailYDL)
+    summary = download(
+        "https://soundcloud.com/a/b", str(tmp_path), "mp3",
+        ffmpeg_location=r"C:\ffmpeg\ffmpeg.exe",
+        auth=AuthConfig(mode="browser", browser="chrome"),
+    )
+    assert summary.succeeded == ["SC Track"]
+    assert len(constructions) == 2
+    assert "cookiesfrombrowser" in constructions[0]
+    assert "cookiesfrombrowser" not in constructions[1]
+    out = capsys.readouterr().out.lower()
+    assert "cookies" in out

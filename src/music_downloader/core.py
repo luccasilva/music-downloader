@@ -53,6 +53,16 @@ def _collect(info: dict | None, summary: DownloadSummary) -> None:
         summary.succeeded.append(info.get("title", "(sem título)"))
 
 
+def _is_cookie_error(exc: Exception) -> bool:
+    msg = str(exc).lower()
+    return any(s in msg for s in ("cookie", "dpapi", "decrypt"))
+
+
+def _extract(url: str, opts: dict) -> dict | None:
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        return ydl.extract_info(url, download=True)
+
+
 def download(
     url: str,
     output_dir: str,
@@ -75,8 +85,19 @@ def download(
     )
     summary = DownloadSummary()
     try:
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(url, download=True)
+        try:
+            info = _extract(url, opts)
+        except Exception as exc:  # noqa: BLE001 — só para detectar erro de cookies
+            if "cookiesfrombrowser" in opts and _is_cookie_error(exc):
+                print(
+                    f"Aviso: não consegui ler cookies do navegador ({exc}). "
+                    "Seguindo sem login (qualidade pública). Para máxima qualidade, "
+                    "exporte um cookies.txt e use --cookies CAMINHO."
+                )
+                opts.pop("cookiesfrombrowser", None)
+                info = _extract(url, opts)
+            else:
+                raise
     except DownloadError as exc:
         summary.failed.append(f"{url}: {exc}")
         return summary
