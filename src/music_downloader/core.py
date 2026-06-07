@@ -1,29 +1,16 @@
-"""Orquestração do download: detecção de playlist, execução e resumo."""
+"""Orquestração do download: roteamento por provedor, execução e resumo."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from urllib.parse import urlparse, parse_qs
 
 import yt_dlp
 from yt_dlp.utils import DownloadError
 
 from .downloader import build_ydl_options, find_ffmpeg
 from .formats import get_format
-
-
-def is_playlist(url: str) -> bool:
-    """True quando a URL deve ser tratada como playlist.
-
-    Regra: precisa do parâmetro ``list`` E (ser caminho /playlist OU não ter um
-    vídeo ``v`` específico). Assim, ``watch?v=...&list=...`` baixa só o vídeo.
-    """
-    parsed = urlparse(url)
-    query = parse_qs(parsed.query)
-    if "list" not in query:
-        return False
-    return "playlist" in parsed.path or "v" not in query
+from .providers import AuthConfig, detect_provider
 
 
 @dataclass
@@ -66,23 +53,64 @@ def _collect(info: dict | None, summary: DownloadSummary) -> None:
         summary.succeeded.append(info.get("title", "(sem título)"))
 
 
+def _is_cookie_error(exc: Exception) -> bool:
+    """True só para falhas de LEITURA/DECRIPTAÇÃO de cookies do navegador.
+
+    Não casa erros de "login necessário" (que também citam cookies), para não
+    rebaixar a qualidade silenciosamente.
+    """
+    msg = str(exc).lower()
+    markers = (
+        "dpapi",
+        "decrypt",
+        "could not copy",
+        "failed to load cookies",
+        "could not read cookie",
+        "unable to read cookie",
+    )
+    return any(m in msg for m in markers)
+
+
+def _extract(url: str, opts: dict) -> dict | None:
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        return ydl.extract_info(url, download=True)
+
+
 def download(
     url: str,
     output_dir: str,
     fmt_name: str,
     ffmpeg_location: str | None = None,
+    auth: AuthConfig | None = None,
 ) -> DownloadSummary:
+    auth = auth or AuthConfig()
+    provider = detect_provider(url)  # ValueError se provedor desconhecido
     fmt = get_format(fmt_name)
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     ffmpeg = ffmpeg_location or find_ffmpeg()
     _ensure_ffmpeg(ffmpeg)
     opts = build_ydl_options(
-        output_dir, fmt, ffmpeg, noplaylist=not is_playlist(url)
+        output_dir,
+        fmt,
+        ffmpeg,
+        noplaylist=not provider.is_playlist(url),
+        overrides=provider.ydl_overrides(auth),
     )
     summary = DownloadSummary()
     try:
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(url, download=True)
+        try:
+            info = _extract(url, opts)
+        except Exception as exc:  # noqa: BLE001 — só para detectar erro de cookies
+            if "cookiesfrombrowser" in opts and _is_cookie_error(exc):
+                print(
+                    f"Aviso: não consegui ler cookies do navegador ({exc}). "
+                    "Seguindo sem login (qualidade pública). Para máxima qualidade, "
+                    "exporte um cookies.txt e use --cookies CAMINHO."
+                )
+                opts.pop("cookiesfrombrowser", None)
+                info = _extract(url, opts)
+            else:
+                raise
     except DownloadError as exc:
         summary.failed.append(f"{url}: {exc}")
         return summary
