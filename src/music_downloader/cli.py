@@ -3,12 +3,28 @@
 from __future__ import annotations
 
 import argparse
+import os
+from pathlib import Path
 
 from .core import download
 from .formats import supported_formats
 from .providers import AuthConfig
+from .spotify import MissingCredentialsError
 
 _BROWSERS = ["chrome", "firefox", "edge", "brave"]
+
+
+def _load_dotenv(path: str = ".env") -> None:
+    """Carrega variáveis de um .env para o ambiente (sem sobrescrever as já definidas)."""
+    file = Path(path)
+    if not file.exists():
+        return
+    for line in file.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -18,7 +34,8 @@ def build_parser() -> argparse.ArgumentParser:
         "MP3/FLAC. O arquivo original é sempre guardado.",
     )
     parser.add_argument(
-        "url", help="URL de um vídeo/faixa ou playlist (YouTube ou SoundCloud)"
+        "url",
+        help="URL de vídeo/faixa/playlist/álbum (YouTube, SoundCloud ou Spotify)",
     )
     parser.add_argument(
         "-o", "--output", default="downloads",
@@ -52,12 +69,17 @@ def _auth_from_args(args: argparse.Namespace) -> AuthConfig:
 
 
 def main(argv: list[str] | None = None) -> int:
+    _load_dotenv()
     args = build_parser().parse_args(argv)
     auth = _auth_from_args(args)
     try:
         summary = download(args.url, args.output, args.format, auth=auth)
-    except (FileNotFoundError, ValueError) as exc:
+    except (FileNotFoundError, ValueError, MissingCredentialsError) as exc:
         print(f"Erro: {exc}")
         return 1
     print(summary.report())
     return 0 if summary.ok else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
