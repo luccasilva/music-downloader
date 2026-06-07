@@ -54,8 +54,21 @@ def _collect(info: dict | None, summary: DownloadSummary) -> None:
 
 
 def _is_cookie_error(exc: Exception) -> bool:
+    """True só para falhas de LEITURA/DECRIPTAÇÃO de cookies do navegador.
+
+    Não casa erros de "login necessário" (que também citam cookies), para não
+    rebaixar a qualidade silenciosamente.
+    """
     msg = str(exc).lower()
-    return any(s in msg for s in ("cookie", "dpapi", "decrypt"))
+    markers = (
+        "dpapi",
+        "decrypt",
+        "could not copy",
+        "failed to load cookies",
+        "could not read cookie",
+        "unable to read cookie",
+    )
+    return any(m in msg for m in markers)
 
 
 def _extract(url: str, opts: dict) -> dict | None:

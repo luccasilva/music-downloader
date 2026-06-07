@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "music-downloader"
 version = "0.1.0"
-description = "Baixa o melhor áudio do YouTube e converte para MP3/FLAC"
+description = "Baixa o melhor áudio do YouTube ou SoundCloud e converte para MP3/FLAC"
 requires-python = ">=3.12"
 dependencies = ["yt-dlp", "mutagen"]
 

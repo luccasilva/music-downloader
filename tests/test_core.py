@@ -148,3 +148,30 @@ def test_download_retries_without_cookies_on_cookie_error(monkeypatch, tmp_path,
     assert "cookiesfrombrowser" not in constructions[1]
     out = capsys.readouterr().out.lower()
     assert "cookies" in out
+
+
+def test_download_does_not_retry_on_login_required_error(monkeypatch, tmp_path, capsys):
+    from yt_dlp.utils import DownloadError
+
+    calls = []
+
+    class _LoginRequiredYDL(_FakeYDL):
+        def __init__(self, opts):
+            calls.append(dict(opts))
+
+        def extract_info(self, url, download):
+            raise DownloadError(
+                "Sign in to confirm... Use --cookies-from-browser or --cookies "
+                "to provide account credentials"
+            )
+
+    monkeypatch.setattr(core_mod.yt_dlp, "YoutubeDL", _LoginRequiredYDL)
+    summary = download(
+        "https://soundcloud.com/a/b", str(tmp_path), "mp3",
+        ffmpeg_location=r"C:\ffmpeg\ffmpeg.exe",
+        auth=AuthConfig(mode="browser", browser="chrome"),
+    )
+    assert summary.ok is False
+    assert summary.failed and "credentials" in summary.failed[0]
+    assert len(calls) == 1  # não deve ter havido retry
+    assert "não consegui ler cookies" not in capsys.readouterr().out
